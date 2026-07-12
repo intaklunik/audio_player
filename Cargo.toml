@@ -1,0 +1,11 @@
+[package]
+name = "audio_player"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+cursive = "0.21.1"
+
+[[bin]]
+name = "AudioPlayer"
+path = "src/main.rs"

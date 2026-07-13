@@ -1,9 +1,7 @@
-use std::time::Duration;
-use std::thread;
+use std::path::{PathBuf, Path};
 use std::sync::mpsc::{Receiver, Sender};
 use crate::player::{AudioPlayer, Song, SongId, SongProgress};
 use crate::finder::{Finder};
-
 
 #[derive(PartialEq)]
 pub enum ViewEvent {
@@ -24,8 +22,9 @@ pub enum UIEvent {
 
 #[derive(PartialEq)]
 pub enum FinderEvent {
-    NewPlaylist(Vec<Song>),
+    NewPlaylist(Vec<PathBuf>),
     NewEmptyPlaylist,
+    Error,
 }
 
 #[derive(PartialEq)]
@@ -60,7 +59,7 @@ impl<View: AppView> Application<View> {
     }
 
     pub fn run(&mut self) {
-        self.finder.lookup_songs();
+        self.finder.lookup_playlist(Path::new("./tests/data"));
         
         while let Ok(event) = self.rx.recv() {
             match event {
@@ -82,6 +81,9 @@ impl<View: AppView> Application<View> {
                 self.player.new_empty_playlist();
                 self.view.update(ViewEvent::Error("Empty Playlist".to_string()));
             },
+            FinderEvent::Error => {
+                self.view.update(ViewEvent::Error("Error occurred during dir search".to_string()));
+            }
         }
     }
 

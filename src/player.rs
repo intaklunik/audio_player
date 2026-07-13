@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use std::sync::mpsc::{Sender};
 use std::fmt;
 use crate::app::AppEvent;
@@ -73,13 +74,24 @@ impl Playlist {
     }
 }
 
-impl From<Vec<Song>> for Playlist {
-    fn from(item: Vec<Song>) -> Self {
-        Self { playlist: item }
+impl From<Vec<PathBuf>> for Playlist {
+    fn from(paths: Vec<PathBuf>) -> Self {
+        let playlist = paths.into_iter().map(|path| {
+            Song {
+                title: path.file_name().unwrap_or_default().to_string_lossy().into_owned(),
+                duration: 0
+            }
+        }).collect();
+        
+        Self {playlist}
     }
 }
 
 impl AudioPlayer {
+    pub fn supported_formats() -> Vec<&'static str> {
+        vec!["mp3"]
+    }
+
     pub fn new(tx: Sender<AppEvent>) -> Self {
         Self { playlist: Playlist::default(), current_song: CurrentSong::default(), tx, mode: AudioPlayerMode::Default }
     } 
@@ -88,7 +100,7 @@ impl AudioPlayer {
         self.playlist.playlist.clone()
     }
 
-    pub fn new_playlist(&mut self, playlist: Vec<Song>) {
+    pub fn new_playlist(&mut self, playlist: Vec<PathBuf>) {
         self.stop();
         self.playlist = Playlist::from(playlist);
      

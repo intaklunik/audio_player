@@ -1,13 +1,14 @@
 use std::path::{PathBuf, Path};
 use std::sync::mpsc::{Receiver, Sender};
-use crate::player::{AudioPlayer, Song, SongId, SongProgress};
+use crate::player::{AudioPlayer};
+use crate::playlist::{TrackId, TrackMetadata, TrackProgress};
 use crate::finder::{Finder};
 
 #[derive(PartialEq)]
 pub enum ViewEvent {
-    NewPlaylist(Vec<Song>),
-    NewCurrentSong(SongId),
-    Progress(SongProgress),
+    NewPlaylist(Vec<TrackMetadata>),
+    NewCurrentSong(TrackId),
+    Progress(TrackProgress),
     Error(String),
     PlayPause,
     Quit,
@@ -17,7 +18,7 @@ pub enum ViewEvent {
 pub enum UIEvent {
     Next,
     Prev,
-    PlayPause(SongId), // play button + from playlist
+    PlayPause(TrackId), // play button + from playlist
 }
 
 #[derive(PartialEq)]
@@ -29,7 +30,7 @@ pub enum FinderEvent {
 
 #[derive(PartialEq)]
 pub enum AudioPlayerEvent {
-    Progress(SongProgress),
+    Progress(TrackProgress),
 }
 
 #[derive(PartialEq)]

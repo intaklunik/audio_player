@@ -4,7 +4,8 @@ use cursive::{
     view::{Nameable, Resizable},
     views::{TextView, LinearLayout, Dialog, SelectView, ViewRef, HideableView },
 };
-use crate::player::{Song, SongId, SongProgress};
+use std::fmt::Write;
+use crate::playlist::{TrackId, TrackProgress, TrackMetadata};
 use crate::app::{UIEvent, AppEvent, ViewEvent, AppView};
 
 
@@ -24,11 +25,11 @@ pub trait CursiveViewExt {
 }
 trait CursiveExt {
     fn show_error_message(&mut self, err: &str);
-    fn update_playlist(&mut self, playlist: Vec<Song>);
-    fn set_current_song(&mut self, id: SongId);
-    fn progress_current_song(&mut self, progress: SongProgress);
+    fn update_playlist(&mut self, playlist: Vec<TrackMetadata>);
+    fn set_current_song(&mut self, id: TrackId);
+    fn progress_current_song(&mut self, progress: TrackProgress);
 
-    fn playlist_view(&mut self) -> ViewRef<SelectView::<Song>>;
+    fn playlist_view(&mut self) -> ViewRef<SelectView::<TrackMetadata>>;
     fn song_view(&mut self) -> ViewRef<TextView>;
     fn song_progress_view(&mut self) -> ViewRef<TextView>;
 
@@ -45,9 +46,9 @@ trait CursiveInputExt {
 
 impl CursiveViewExt for Cursive {
     fn create(&mut self) {
-        let mut select_view = SelectView::<Song>::new();
+        let mut select_view = SelectView::<TrackMetadata>::new();
     
-        select_view = select_view.on_submit(|s: &mut Cursive, _song: &Song| s.play_pause());
+        select_view = select_view.on_submit(|s: &mut Cursive, _song: &TrackMetadata| s.play_pause());
 
         let layout = LinearLayout::horizontal()
             .child(select_view.with_name(PLAYLIST_VIEW_NAME).min_width(40).max_width(60))
@@ -73,8 +74,8 @@ impl CursiveViewExt for Cursive {
 }
 
 impl CursiveExt for Cursive {
-    fn playlist_view(&mut self) -> ViewRef<SelectView::<Song>> {
-        self.find_name::<SelectView<Song>>(PLAYLIST_VIEW_NAME).unwrap()
+    fn playlist_view(&mut self) -> ViewRef<SelectView::<TrackMetadata>> {
+        self.find_name::<SelectView<TrackMetadata>>(PLAYLIST_VIEW_NAME).unwrap()
     }
 
     fn song_view(&mut self) -> ViewRef<TextView> {
@@ -85,7 +86,7 @@ impl CursiveExt for Cursive {
         self.find_name::<TextView>(SONG_PROGRESS_VIEW_NAME).unwrap()
     }
 
-    fn progress_current_song(&mut self, progress: SongProgress) {
+    fn progress_current_song(&mut self, progress: TrackProgress) {
         let mut song_progress_view = self.song_progress_view();
         song_progress_view.set_content(progress.to_string());
     }
@@ -116,22 +117,30 @@ impl CursiveExt for Cursive {
         view.hide();
     }
 
-    fn update_playlist(&mut self, playlist: Vec<Song>) {
+    fn update_playlist(&mut self, playlist: Vec<TrackMetadata>) {
         let mut playlist_view = self.playlist_view();
         
-        playlist_view.add_all(playlist.into_iter().map(|song|(song.to_string(), song)));
+        playlist_view.add_all(playlist.into_iter().map(|song|(song.fullname.clone(), song)));
     }
 
-    fn set_current_song(&mut self, id: SongId) {
+    fn set_current_song(&mut self, id: TrackId) {
         let mut playlist_view = self.playlist_view();
         
         playlist_view.set_selection(id);
 
         if let Some((_label, song)) = playlist_view.get_item(id) {
-            self.song_view().set_content(song.to_string());
+            self.song_view().set_content(track_content(song));
             self.song_progress_view().set_content(song.duration.to_string());
         }
     }
+}
+
+fn track_content(track: &TrackMetadata) -> String {
+    let mut s = String::new();
+    writeln!(s, "{}", track.title).unwrap();
+    writeln!(s, "{}", track.author).unwrap();
+
+    s
 }
 
 impl CursiveInputExt for Cursive {

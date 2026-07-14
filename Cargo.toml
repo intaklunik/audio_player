@@ -5,6 +5,7 @@ edition = "2024"
 
 [dependencies]
 cursive = "0.21.1"
+lofty = "0.22"
 
 [[bin]]
 name = "AudioPlayer"

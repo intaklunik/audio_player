@@ -1,9 +1,14 @@
-use lofty::read_from_path;
-use lofty::prelude::{Accessor, TaggedFileExt};
-use lofty::error::LoftyError;
-use lofty::file::AudioFile;
-use std::path::PathBuf;
-use std::fmt;
+use lofty::{
+    read_from_path,
+    prelude::{Accessor, TaggedFileExt},
+    error::LoftyError,
+    file::AudioFile,
+};
+use std::{
+    path::PathBuf,
+    fmt
+};
+use crate::app::{AppError, AppResult};
 
 pub type TrackId = usize;
 pub type TrackMaybeId = i128;
@@ -27,12 +32,6 @@ pub struct TrackMetadata {
 }
 
 #[derive(Default, Clone, Debug)]
-pub struct CurrentTrack {
-    pub id: TrackId,
-    pub progress: TrackProgress,
-}
-
-#[derive(Default, Clone, Debug)]
 pub struct Playlist {
     playlist: Vec<Track>,
 }
@@ -44,19 +43,23 @@ impl fmt::Display for TrackProgress {
 }
 
 impl Track {
-    pub fn from_path(path: PathBuf) -> Result<Self, LoftyError> {
-        let metadata = TrackMetadata::from_path(&path)?;
+    pub fn try_from_path(path: PathBuf) -> AppResult<Self> {
+        let metadata = TrackMetadata::try_from_path(&path)?;
         Ok(Self{ path, metadata })
     }
 
     pub fn metadata(&self) -> &TrackMetadata {
         &self.metadata
     }
+
+    pub fn path(&self) -> &PathBuf {
+        &self.path
+    }
 }
 
 impl TrackMetadata {
-    pub fn from_path(path: &PathBuf) -> Result<Self, LoftyError> {
-        let file = read_from_path(path)?;
+    pub fn try_from_path(path: &PathBuf) -> AppResult<Self> {
+        let file = read_from_path(path).map_err(|e|AppError::Lofty(e))?;
         let duration = file.properties().duration();
         let (title, author) = match file.primary_tag() {
             Some(tag) => (tag.title().unwrap_or_default().into_owned(), tag.artist().unwrap_or_default().into_owned()),
@@ -72,38 +75,32 @@ impl TrackMetadata {
     }
 }
 
-impl CurrentTrack {
-    pub fn new(id: TrackId) -> Self {
-        Self { id, progress: TrackProgress::default() }
-    }
-}
-
 impl Playlist {
-    pub fn get(&self, id: TrackMaybeId) -> TrackId {
-        if id < 0 {
-            self.playlist.len() - 1
-        } else if id >= self.playlist.len() as TrackMaybeId {
-            0
-        } else {
-            id as TrackId
-        }
+    pub fn normalize(&self, id: TrackMaybeId) -> TrackId {
+        if id < 0 { self.playlist.len() - 1 }
+        else if id >= self.playlist.len() as TrackMaybeId { 0 }
+        else { id as TrackId }
+    }
+
+    pub fn get(&self, id: TrackMaybeId) -> &Track {
+        &self.playlist[self.normalize(id)]
     }
 
     pub fn get_playlist(&self) -> &Vec<Track> {
         &self.playlist
     }
-
-    pub fn empty(&self) -> bool {
-        self.playlist.is_empty()
-    }
 }
 
-impl From<Vec<PathBuf>> for Playlist {
-    fn from(paths: Vec<PathBuf>) -> Self {
-        Self { playlist: paths
+impl TryFrom<Vec<PathBuf>> for Playlist {
+    type Error = AppError;
+
+    fn try_from(paths: Vec<PathBuf>) -> Result<Self, Self::Error> {
+        let playlist: Vec<Track> = paths
             .into_iter()
-            .filter_map(|path: PathBuf|Track::from_path(path).ok())
-            .collect()
-        }
+            .filter_map(|path: PathBuf|Track::try_from_path(path).ok())
+            .collect();
+
+        if playlist.is_empty() { Err(AppError::EmptyPlaylist) }
+        else { Ok(Self { playlist }) }
     }
 }

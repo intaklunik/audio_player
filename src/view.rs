@@ -5,7 +5,7 @@ use cursive::{
     views::{TextView, LinearLayout, Dialog, SelectView, ViewRef, HideableView },
 };
 use std::fmt::Write;
-use crate::playlist::{TrackId, TrackProgress, TrackMetadata};
+use crate::{app::SenderExt, playlist::{TrackId, TrackMaybeId, TrackMetadata, TrackProgress}};
 use crate::app::{UIEvent, AppEvent, ViewEvent, AppView};
 
 
@@ -166,16 +166,16 @@ impl CursiveInputExt for Cursive {
 }
 
 fn send_ui_event(s: &mut Cursive, event: UIEvent) {
-    s.with_user_data(|tx: &mut Sender<AppEvent>| { tx.send(AppEvent::UI(event)).unwrap(); });
+    s.with_user_data(|tx: &mut Sender<AppEvent>| { tx.send_ui_event(event); });
 }
 
 fn send_quit(s: &mut Cursive) {
-    s.with_user_data(|tx: &mut Sender<AppEvent>| { tx.send(AppEvent::Quit).unwrap(); });
+    s.with_user_data(|tx: &mut Sender<AppEvent>| { tx.send_quit_event(); });
 }
 
 fn send_playpause(s: &mut Cursive) {
     if let Some(song_id) = s.playlist_view().selected_id() {
-        send_ui_event(s, UIEvent::PlayPause(song_id));
+        send_ui_event(s, UIEvent::PlayPause(song_id as TrackMaybeId));
     }
 }
 

@@ -1,8 +1,10 @@
-use std::fs::DirEntry;
-use std::path::{PathBuf, Path};
-use std::{fs, io};
-use std::sync::mpsc::{Sender};
-use crate::app::{AppEvent, FinderEvent};
+use std::{
+    fs, io,
+    sync::mpsc::{Sender},
+    path::{PathBuf, Path},
+    fs::DirEntry,
+};
+use crate::app::{AppEvent, FinderEvent, SenderExt};
 use crate::player::AudioPlayer;
 
 pub struct Finder {
@@ -23,7 +25,7 @@ impl Finder {
             Err(_) => FinderEvent::Error,
         };
 
-        self.send_event(event);
+        self.tx.send_finder_event(event);
     }
 
     fn lookup_files(dir: &Path) -> io::Result<Vec<PathBuf>> {
@@ -43,10 +45,6 @@ impl Finder {
             .collect();
 
         Ok(files)
-    }
-
-    fn send_event(&self, event: FinderEvent) {
-        self.tx.send(AppEvent::Finder(event)).unwrap();
     }
 }
 

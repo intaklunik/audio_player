@@ -1,8 +1,23 @@
 use std::path::{PathBuf, Path};
 use std::sync::mpsc::{Receiver, Sender};
 use crate::player::{AudioPlayer};
-use crate::playlist::{TrackId, TrackMetadata, TrackProgress};
+use crate::playlist::{TrackId, TrackMaybeId, TrackMetadata, TrackProgress};
 use crate::finder::{Finder};
+use thiserror::Error;
+
+pub type AppResult<T> = Result<T, AppError>;
+
+#[derive(Debug, Error)]
+pub enum  AppError {
+    #[error("IO error: {0}")]
+    IO(#[from] std::io::Error),
+    
+    #[error("Lofty error: {0}")]
+    Lofty(#[from] lofty::error::LoftyError),
+
+    #[error("Empty playlist")]
+    EmptyPlaylist,
+}
 
 #[derive(PartialEq)]
 pub enum ViewEvent {
@@ -18,7 +33,7 @@ pub enum ViewEvent {
 pub enum UIEvent {
     Next,
     Prev,
-    PlayPause(TrackId), // play button + from playlist
+    PlayPause(TrackMaybeId), // play button + from playlist
 }
 
 #[derive(PartialEq)]
@@ -30,6 +45,7 @@ pub enum FinderEvent {
 
 #[derive(PartialEq)]
 pub enum AudioPlayerEvent {
+    NewTrack(TrackId),
     Progress(TrackProgress),
 }
 
@@ -39,6 +55,20 @@ pub enum AppEvent {
     Player(AudioPlayerEvent),
     Finder(FinderEvent),
     Quit,
+}
+
+pub trait SenderExt {
+    fn send_ui_event(&self, event: UIEvent);
+    fn send_player_event(&self, event: AudioPlayerEvent);
+    fn send_finder_event(&self, event: FinderEvent);
+    fn send_quit_event(&self);
+}
+
+impl SenderExt for Sender<AppEvent> {
+    fn send_ui_event(&self, event: UIEvent) { self.send(AppEvent::UI(event)).unwrap(); }
+    fn send_player_event(&self, event: AudioPlayerEvent) { self.send(AppEvent::Player(event)).unwrap(); }
+    fn send_finder_event(&self, event: FinderEvent) { self.send(AppEvent::Finder(event)).unwrap(); }
+    fn send_quit_event(&self) { self.send(AppEvent::Quit).unwrap(); }
 }
 
 pub trait AppView {
@@ -73,41 +103,39 @@ impl<View: AppView> Application<View> {
     }
 
     fn finder_event_handler(&mut self, event: FinderEvent) {
-         match event {
+        let view_event: ViewEvent = match event {
             FinderEvent::NewPlaylist(playlist) => { 
                 self.player.new_playlist(playlist);
-                self.view.update(ViewEvent::NewPlaylist(self.player.playlist()));
+                match self.player.playlist() {
+                    Some(playlist) => ViewEvent::NewPlaylist(playlist),
+                    None => ViewEvent::Error(AppError::EmptyPlaylist.to_string()),
+                }
             },
             FinderEvent::NewEmptyPlaylist => {
                 self.player.new_empty_playlist();
-                self.view.update(ViewEvent::Error("Empty Playlist".to_string()));
+                ViewEvent::Error(AppError::EmptyPlaylist.to_string())
             },
-            FinderEvent::Error => {
-                self.view.update(ViewEvent::Error("Error occurred during dir search".to_string()));
-            }
-        }
+            FinderEvent::Error => ViewEvent::Error(AppError::EmptyPlaylist.to_string()),
+        };
+
+        self.view.update(view_event);
     }
 
     fn player_event_handler(&mut self, event: AudioPlayerEvent) {
         match event {
             AudioPlayerEvent::Progress(progress) => self.view.update(ViewEvent::Progress(progress)),
+            AudioPlayerEvent::NewTrack(id) => self.view.update(ViewEvent::NewCurrentSong(id)),
         }
     }
 
     fn ui_event_handler(&mut self, event: UIEvent) {        
-        let result: Result<ViewEvent, String>  = match event {
-            UIEvent::PlayPause(id) => {
-                if self.player.is_current_song(id) { self.player.play_pause().map(|_| ViewEvent::PlayPause) }
-                else { self.player.play(id).map(ViewEvent::NewCurrentSong) }
-            },
-            UIEvent::Next => self.player.next().map(ViewEvent::NewCurrentSong),
-            UIEvent::Prev => self.player.prev().map(ViewEvent::NewCurrentSong),
-            
+        let result: AppResult<()> = match event {
+            UIEvent::PlayPause(id) => self.player.play(id),
+            UIEvent::Next => self.player.next(),
+            UIEvent::Prev => self.player.prev(),
         }; 
-        match result {
-            Ok(event) => self.view.update(event),
-            Err(e) => self.view.update(ViewEvent::Error(e)),
-        }
+
+        result.map_err(|e|self.view.update(ViewEvent::Error(e.to_string())));
     }
 
     fn stop(&mut self) {

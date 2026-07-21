@@ -1,14 +1,13 @@
-use std::sync::mpsc::{Sender};
+use crate::app::app::AppView;
+use crate::app::types::{AppEvent, SenderExt, UIEvent, ViewEvent};
+use crate::player::playlist::{TrackId, TrackMaybeId, TrackMetadata, TrackProgress};
 use cursive::{
-    Cursive, CbSink,
+    CbSink, Cursive,
     view::{Nameable, Resizable},
-    views::{TextView, LinearLayout, Dialog, SelectView, ViewRef, HideableView },
+    views::{Dialog, HideableView, LinearLayout, SelectView, TextView, ViewRef},
 };
 use std::fmt::Write;
-use crate::app::types::{SenderExt, UIEvent, AppEvent, ViewEvent,};
-use crate::player::playlist::{TrackId, TrackMaybeId, TrackMetadata, TrackProgress};
-use crate::app::app::{AppView};
-
+use std::sync::mpsc::Sender;
 
 const PLAYPAUSE_ICON: &str = "\u{23EF}";
 const PREVTRACK_ICON: &str = "<<";
@@ -30,7 +29,7 @@ trait CursiveExt {
     fn set_current_track(&mut self, id: TrackId);
     fn progress_current_track(&mut self, progress: TrackProgress);
 
-    fn playlist_view(&mut self) -> ViewRef<SelectView::<TrackMetadata>>;
+    fn playlist_view(&mut self) -> ViewRef<SelectView<TrackMetadata>>;
     fn track_view(&mut self) -> ViewRef<TextView>;
     fn track_progress_view(&mut self) -> ViewRef<TextView>;
 
@@ -48,12 +47,23 @@ trait CursiveInputExt {
 impl CursiveViewExt for Cursive {
     fn create(&mut self) {
         let mut select_view = SelectView::<TrackMetadata>::new();
-    
-        select_view = select_view.on_submit(|s: &mut Cursive, _track: &TrackMetadata| s.play_pause());
+
+        select_view =
+            select_view.on_submit(|s: &mut Cursive, _track: &TrackMetadata| s.play_pause());
 
         let layout = LinearLayout::horizontal()
-            .child(select_view.with_name(PLAYLIST_VIEW_NAME).min_width(40).max_width(60))
-            .child(TextView::new("").with_name(TRACK_VIEW_NAME).min_width(30).max_width(40))
+            .child(
+                select_view
+                    .with_name(PLAYLIST_VIEW_NAME)
+                    .min_width(40)
+                    .max_width(60),
+            )
+            .child(
+                TextView::new("")
+                    .with_name(TRACK_VIEW_NAME)
+                    .min_width(30)
+                    .max_width(40),
+            )
             .child(TextView::new("").with_name(TRACK_PROGRESS_VIEW_NAME));
 
         self.add_layer(layout);
@@ -61,22 +71,24 @@ impl CursiveViewExt for Cursive {
         self.menubar()
             .add_leaf(PREVTRACK_ICON, |s| s.play_prev())
             .add_leaf(PLAYPAUSE_ICON, |s| s.play_pause())
-            .add_leaf(NEXTTRACK_ICON, |s| s.play_next())
-        ;
+            .add_leaf(NEXTTRACK_ICON, |s| s.play_next());
 
         self.add_global_callback('q', |s| s.quit_app());
         self.set_autohide_menu(false);
 
-        self.add_layer(HideableView::new(Dialog::around(
-            TextView::new("Loading...".to_string()).with_name(WAIT_VIEW_MSG_NAME)
-        )).with_name(WAIT_VIEW_NAME));
-
-    }   
+        self.add_layer(
+            HideableView::new(Dialog::around(
+                TextView::new("Loading...".to_string()).with_name(WAIT_VIEW_MSG_NAME),
+            ))
+            .with_name(WAIT_VIEW_NAME),
+        );
+    }
 }
 
 impl CursiveExt for Cursive {
-    fn playlist_view(&mut self) -> ViewRef<SelectView::<TrackMetadata>> {
-        self.find_name::<SelectView<TrackMetadata>>(PLAYLIST_VIEW_NAME).unwrap()
+    fn playlist_view(&mut self) -> ViewRef<SelectView<TrackMetadata>> {
+        self.find_name::<SelectView<TrackMetadata>>(PLAYLIST_VIEW_NAME)
+            .unwrap()
     }
 
     fn track_view(&mut self) -> ViewRef<TextView> {
@@ -84,7 +96,8 @@ impl CursiveExt for Cursive {
     }
 
     fn track_progress_view(&mut self) -> ViewRef<TextView> {
-        self.find_name::<TextView>(TRACK_PROGRESS_VIEW_NAME).unwrap()
+        self.find_name::<TextView>(TRACK_PROGRESS_VIEW_NAME)
+            .unwrap()
     }
 
     fn progress_current_track(&mut self, progress: TrackProgress) {
@@ -98,9 +111,12 @@ impl CursiveExt for Cursive {
             v.set_content(err.to_string());
         } else {
             self.add_layer(
-            Dialog::around(
-                TextView::new(err.to_string()).with_name(ERROR_VIEW_NAME))
-                .button("Ok", |s| { s.pop_layer(); })
+                Dialog::around(TextView::new(err.to_string()).with_name(ERROR_VIEW_NAME)).button(
+                    "Ok",
+                    |s| {
+                        s.pop_layer();
+                    },
+                ),
             );
         }
     }
@@ -108,30 +124,39 @@ impl CursiveExt for Cursive {
     fn show_update_message(&mut self, msg: &str) {
         let mut view = self.find_name::<TextView>(WAIT_VIEW_MSG_NAME).unwrap();
         view.set_content(msg.to_string());
-        
-        let mut view = self.find_name::<HideableView<Dialog>>(WAIT_VIEW_NAME).unwrap();
+
+        let mut view = self
+            .find_name::<HideableView<Dialog>>(WAIT_VIEW_NAME)
+            .unwrap();
         view.unhide();
     }
 
     fn hide_update_message(&mut self) {
-        let mut view = self.find_name::<HideableView<Dialog>>(WAIT_VIEW_NAME).unwrap();
+        let mut view = self
+            .find_name::<HideableView<Dialog>>(WAIT_VIEW_NAME)
+            .unwrap();
         view.hide();
     }
 
     fn update_playlist(&mut self, playlist: Vec<TrackMetadata>) {
         let mut playlist_view = self.playlist_view();
-        
-        playlist_view.add_all(playlist.into_iter().map(|track|(track.fullname.clone(), track)));
+
+        playlist_view.add_all(
+            playlist
+                .into_iter()
+                .map(|track| (track.fullname.clone(), track)),
+        );
     }
 
     fn set_current_track(&mut self, id: TrackId) {
         let mut playlist_view = self.playlist_view();
-        
+
         playlist_view.set_selection(id);
 
         if let Some((_label, track)) = playlist_view.get_item(id) {
             self.track_view().set_content(track_content(track));
-            self.track_progress_view().set_content(track.duration.to_string());
+            self.track_progress_view()
+                .set_content(track.duration.to_string());
         }
     }
 }
@@ -152,7 +177,7 @@ impl CursiveInputExt for Cursive {
 
     fn play_prev(&mut self) {
         self.show_update_message("Loading previous track");
-         send_ui_event(self, UIEvent::Prev);
+        send_ui_event(self, UIEvent::Prev);
     }
 
     fn play_pause(&mut self) {
@@ -167,11 +192,15 @@ impl CursiveInputExt for Cursive {
 }
 
 fn send_ui_event(s: &mut Cursive, event: UIEvent) {
-    s.with_user_data(|tx: &mut Sender<AppEvent>| { tx.send_ui_event(event); });
+    s.with_user_data(|tx: &mut Sender<AppEvent>| {
+        tx.send_ui_event(event);
+    });
 }
 
 fn send_quit(s: &mut Cursive) {
-    s.with_user_data(|tx: &mut Sender<AppEvent>| { tx.send_quit_event(); });
+    s.with_user_data(|tx: &mut Sender<AppEvent>| {
+        tx.send_quit_event();
+    });
 }
 
 fn send_playpause(s: &mut Cursive) {
@@ -192,36 +221,47 @@ impl CursiveAppView {
 
 impl AppView for CursiveAppView {
     fn update(&mut self, event: ViewEvent) {
-       match event {
-            ViewEvent::NewPlaylist(playlist) => 
-                self.sink.send(Box::new(move | s: &mut Cursive| {
-                    s.update_playlist(playlist); 
+        match event {
+            ViewEvent::NewPlaylist(playlist) => self
+                .sink
+                .send(Box::new(move |s: &mut Cursive| {
+                    s.update_playlist(playlist);
                     s.hide_update_message();
-                })).unwrap(),
-            ViewEvent::NewCurrentTrack(id) => 
-                self.sink.send(Box::new(move | s: &mut Cursive| {
-                    s.set_current_track(id); 
+                }))
+                .unwrap(),
+            ViewEvent::NewCurrentTrack(id) => self
+                .sink
+                .send(Box::new(move |s: &mut Cursive| {
+                    s.set_current_track(id);
                     s.hide_update_message();
-                })).unwrap(),
-            ViewEvent::Progress(progress) => 
-                self.sink.send(Box::new(move | s: &mut Cursive| {
-                    s.progress_current_track(progress); 
-                })).unwrap(),
-            ViewEvent::Error(err) => 
-                self.sink.send(Box::new(move | s: &mut Cursive| {
-                    s.show_error_message(&err); 
+                }))
+                .unwrap(),
+            ViewEvent::Progress(progress) => self
+                .sink
+                .send(Box::new(move |s: &mut Cursive| {
+                    s.progress_current_track(progress);
+                }))
+                .unwrap(),
+            ViewEvent::Error(err) => self
+                .sink
+                .send(Box::new(move |s: &mut Cursive| {
+                    s.show_error_message(&err);
                     s.hide_update_message();
-                })).unwrap(),
-            ViewEvent::Quit => 
-                self.sink.send(Box::new(move | s: &mut Cursive| {
+                }))
+                .unwrap(),
+            ViewEvent::Quit => self
+                .sink
+                .send(Box::new(move |s: &mut Cursive| {
                     s.hide_update_message();
-                    s.quit(); 
-                })).unwrap(),
-            ViewEvent::PlayPause => 
-                self.sink.send(Box::new(move | s: &mut Cursive| {
-                    s.hide_update_message(); 
-                })).unwrap(),
-       }
+                    s.quit();
+                }))
+                .unwrap(),
+            ViewEvent::PlayPause => self
+                .sink
+                .send(Box::new(move |s: &mut Cursive| {
+                    s.hide_update_message();
+                }))
+                .unwrap(),
+        }
     }
-
 }

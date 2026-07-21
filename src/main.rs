@@ -1,11 +1,11 @@
-use std::thread;
-use std::sync::mpsc::{Sender, Receiver};
-use std::sync::mpsc;
-use cursive::{Cursive, CursiveExt};
-use audio_player::app::app::{Application};
+use audio_player::app::app::Application;
 use audio_player::app::types::AppEvent;
-use audio_player::view::{CursiveAppView, CursiveViewExt};
 use audio_player::app::types::AppResult;
+use audio_player::view::{CursiveAppView, CursiveViewExt};
+use cursive::{Cursive, CursiveExt};
+use std::sync::mpsc;
+use std::sync::mpsc::{Receiver, Sender};
+use std::thread;
 
 fn main() -> AppResult<()> {
     let mut ui = Cursive::new();
@@ -17,8 +17,8 @@ fn main() -> AppResult<()> {
 
     let mut app = Application::try_new(view, ui_rx, ui_tx)?;
 
-    let t_app = thread::spawn(move || { 
-            app.run();
+    let t_app = thread::spawn(move || {
+        app.run();
     });
 
     ui.run();

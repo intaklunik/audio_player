@@ -5,17 +5,18 @@ use cursive::{
     views::{TextView, LinearLayout, Dialog, SelectView, ViewRef, HideableView },
 };
 use std::fmt::Write;
-use crate::{app::SenderExt, playlist::{TrackId, TrackMaybeId, TrackMetadata, TrackProgress}};
-use crate::app::{UIEvent, AppEvent, ViewEvent, AppView};
+use crate::app::types::{SenderExt, UIEvent, AppEvent, ViewEvent,};
+use crate::player::playlist::{TrackId, TrackMaybeId, TrackMetadata, TrackProgress};
+use crate::app::app::{AppView};
 
 
 const PLAYPAUSE_ICON: &str = "\u{23EF}";
-const PREVSONG_ICON: &str = "<<";
-const NEXTSONG_ICON: &str = ">>";
+const PREVTRACK_ICON: &str = "<<";
+const NEXTTRACK_ICON: &str = ">>";
 
 const PLAYLIST_VIEW_NAME: &str = "PlaylistView";
-const SONG_VIEW_NAME: &str = "SongView";
-const SONG_PROGRESS_VIEW_NAME: &str = "SongProgressView";
+const TRACK_VIEW_NAME: &str = "TrackView";
+const TRACK_PROGRESS_VIEW_NAME: &str = "TrackProgressView";
 const WAIT_VIEW_NAME: &str = "WaitView";
 const WAIT_VIEW_MSG_NAME: &str = "WaitViewMsg";
 const ERROR_VIEW_NAME: &str = "ErrorView";
@@ -26,12 +27,12 @@ pub trait CursiveViewExt {
 trait CursiveExt {
     fn show_error_message(&mut self, err: &str);
     fn update_playlist(&mut self, playlist: Vec<TrackMetadata>);
-    fn set_current_song(&mut self, id: TrackId);
-    fn progress_current_song(&mut self, progress: TrackProgress);
+    fn set_current_track(&mut self, id: TrackId);
+    fn progress_current_track(&mut self, progress: TrackProgress);
 
     fn playlist_view(&mut self) -> ViewRef<SelectView::<TrackMetadata>>;
-    fn song_view(&mut self) -> ViewRef<TextView>;
-    fn song_progress_view(&mut self) -> ViewRef<TextView>;
+    fn track_view(&mut self) -> ViewRef<TextView>;
+    fn track_progress_view(&mut self) -> ViewRef<TextView>;
 
     fn show_update_message(&mut self, msg: &str);
     fn hide_update_message(&mut self);
@@ -48,19 +49,19 @@ impl CursiveViewExt for Cursive {
     fn create(&mut self) {
         let mut select_view = SelectView::<TrackMetadata>::new();
     
-        select_view = select_view.on_submit(|s: &mut Cursive, _song: &TrackMetadata| s.play_pause());
+        select_view = select_view.on_submit(|s: &mut Cursive, _track: &TrackMetadata| s.play_pause());
 
         let layout = LinearLayout::horizontal()
             .child(select_view.with_name(PLAYLIST_VIEW_NAME).min_width(40).max_width(60))
-            .child(TextView::new("").with_name(SONG_VIEW_NAME).min_width(30).max_width(40))
-            .child(TextView::new("").with_name(SONG_PROGRESS_VIEW_NAME));
+            .child(TextView::new("").with_name(TRACK_VIEW_NAME).min_width(30).max_width(40))
+            .child(TextView::new("").with_name(TRACK_PROGRESS_VIEW_NAME));
 
         self.add_layer(layout);
 
         self.menubar()
-            .add_leaf(PREVSONG_ICON, |s| s.play_prev())
+            .add_leaf(PREVTRACK_ICON, |s| s.play_prev())
             .add_leaf(PLAYPAUSE_ICON, |s| s.play_pause())
-            .add_leaf(NEXTSONG_ICON, |s| s.play_next())
+            .add_leaf(NEXTTRACK_ICON, |s| s.play_next())
         ;
 
         self.add_global_callback('q', |s| s.quit_app());
@@ -78,17 +79,17 @@ impl CursiveExt for Cursive {
         self.find_name::<SelectView<TrackMetadata>>(PLAYLIST_VIEW_NAME).unwrap()
     }
 
-    fn song_view(&mut self) -> ViewRef<TextView> {
-        self.find_name::<TextView>(SONG_VIEW_NAME).unwrap()
+    fn track_view(&mut self) -> ViewRef<TextView> {
+        self.find_name::<TextView>(TRACK_VIEW_NAME).unwrap()
     }
 
-    fn song_progress_view(&mut self) -> ViewRef<TextView> {
-        self.find_name::<TextView>(SONG_PROGRESS_VIEW_NAME).unwrap()
+    fn track_progress_view(&mut self) -> ViewRef<TextView> {
+        self.find_name::<TextView>(TRACK_PROGRESS_VIEW_NAME).unwrap()
     }
 
-    fn progress_current_song(&mut self, progress: TrackProgress) {
-        let mut song_progress_view = self.song_progress_view();
-        song_progress_view.set_content(progress.to_string());
+    fn progress_current_track(&mut self, progress: TrackProgress) {
+        let mut track_progress_view = self.track_progress_view();
+        track_progress_view.set_content(progress.to_string());
     }
 
     fn show_error_message(&mut self, err: &str) {
@@ -120,17 +121,17 @@ impl CursiveExt for Cursive {
     fn update_playlist(&mut self, playlist: Vec<TrackMetadata>) {
         let mut playlist_view = self.playlist_view();
         
-        playlist_view.add_all(playlist.into_iter().map(|song|(song.fullname.clone(), song)));
+        playlist_view.add_all(playlist.into_iter().map(|track|(track.fullname.clone(), track)));
     }
 
-    fn set_current_song(&mut self, id: TrackId) {
+    fn set_current_track(&mut self, id: TrackId) {
         let mut playlist_view = self.playlist_view();
         
         playlist_view.set_selection(id);
 
-        if let Some((_label, song)) = playlist_view.get_item(id) {
-            self.song_view().set_content(track_content(song));
-            self.song_progress_view().set_content(song.duration.to_string());
+        if let Some((_label, track)) = playlist_view.get_item(id) {
+            self.track_view().set_content(track_content(track));
+            self.track_progress_view().set_content(track.duration.to_string());
         }
     }
 }
@@ -145,17 +146,17 @@ fn track_content(track: &TrackMetadata) -> String {
 
 impl CursiveInputExt for Cursive {
     fn play_next(&mut self) {
-        self.show_update_message("Loading next song");
+        self.show_update_message("Loading next track");
         send_ui_event(self, UIEvent::Next);
     }
 
     fn play_prev(&mut self) {
-        self.show_update_message("Loading previous song");
+        self.show_update_message("Loading previous track");
          send_ui_event(self, UIEvent::Prev);
     }
 
     fn play_pause(&mut self) {
-        self.show_update_message("Loading current song");
+        self.show_update_message("Loading current track");
         send_playpause(self);
     }
 
@@ -174,8 +175,8 @@ fn send_quit(s: &mut Cursive) {
 }
 
 fn send_playpause(s: &mut Cursive) {
-    if let Some(song_id) = s.playlist_view().selected_id() {
-        send_ui_event(s, UIEvent::PlayPause(song_id as TrackMaybeId));
+    if let Some(track_id) = s.playlist_view().selected_id() {
+        send_ui_event(s, UIEvent::PlayPause(track_id as TrackMaybeId));
     }
 }
 
@@ -197,14 +198,14 @@ impl AppView for CursiveAppView {
                     s.update_playlist(playlist); 
                     s.hide_update_message();
                 })).unwrap(),
-            ViewEvent::NewCurrentSong(id) => 
+            ViewEvent::NewCurrentTrack(id) => 
                 self.sink.send(Box::new(move | s: &mut Cursive| {
-                    s.set_current_song(id); 
+                    s.set_current_track(id); 
                     s.hide_update_message();
                 })).unwrap(),
             ViewEvent::Progress(progress) => 
                 self.sink.send(Box::new(move | s: &mut Cursive| {
-                    s.progress_current_song(progress); 
+                    s.progress_current_track(progress); 
                 })).unwrap(),
             ViewEvent::Error(err) => 
                 self.sink.send(Box::new(move | s: &mut Cursive| {

@@ -1,14 +1,12 @@
 use lofty::{
     read_from_path,
     prelude::{Accessor, TaggedFileExt},
-    error::LoftyError,
     file::AudioFile,
 };
 use std::{
-    path::PathBuf,
-    fmt
+    ffi::OsStr, fmt, path::PathBuf
 };
-use crate::app::{AppError, AppResult};
+use crate::app::types::{AppError, AppResult};
 
 pub type TrackId = usize;
 pub type TrackMaybeId = i128;
@@ -32,7 +30,7 @@ pub struct TrackMetadata {
 }
 
 #[derive(Default, Clone, Debug)]
-pub struct Playlist {
+pub(super) struct Playlist {
     playlist: Vec<Track>,
 }
 
@@ -61,13 +59,17 @@ impl TrackMetadata {
     pub fn try_from_path(path: &PathBuf) -> AppResult<Self> {
         let file = read_from_path(path).map_err(|e|AppError::Lofty(e))?;
         let duration = file.properties().duration();
-        let (title, author) = match file.primary_tag() {
-            Some(tag) => (tag.title().unwrap_or_default().into_owned(), tag.artist().unwrap_or_default().into_owned()),
-            None => ("No Title".to_string(), "No Author".to_string()),
-        };
+
+        let title = file.primary_tag()
+            .and_then(|tag|tag.title().map(|s|s.into_owned()))
+            .unwrap_or("No Title".to_string());
+
+        let author = file.primary_tag()
+            .and_then(|tag|tag.artist().map(|s|s.into_owned()))
+            .unwrap_or("No Author".to_string());
     
         Ok(Self {
-            fullname: path.file_name().unwrap_or_default().to_string_lossy().into_owned(),
+            fullname: path.file_name().unwrap_or(OsStr::new("No Fullname")).to_string_lossy().into_owned(),
             title,
             author,
             duration: duration.as_secs()
@@ -86,7 +88,7 @@ impl Playlist {
         &self.playlist[self.normalize(id)]
     }
 
-    pub fn get_playlist(&self) -> &Vec<Track> {
+    pub fn vec(&self) -> &Vec<Track> {
         &self.playlist
     }
 }
@@ -97,7 +99,7 @@ impl TryFrom<Vec<PathBuf>> for Playlist {
     fn try_from(paths: Vec<PathBuf>) -> Result<Self, Self::Error> {
         let playlist: Vec<Track> = paths
             .into_iter()
-            .filter_map(|path: PathBuf|Track::try_from_path(path).ok())
+            .flat_map(|path: PathBuf|Track::try_from_path(path))
             .collect();
 
         if playlist.is_empty() { Err(AppError::EmptyPlaylist) }

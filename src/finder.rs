@@ -4,8 +4,8 @@ use std::{
     path::{PathBuf, Path},
     fs::DirEntry,
 };
-use crate::app::{AppEvent, FinderEvent, SenderExt};
-use crate::player::AudioPlayer;
+use crate::player::player::AudioPlayer;
+use crate::app::types::{AppEvent, FinderEvent, AppError, SenderExt};
 
 pub struct Finder {
     tx: Sender<AppEvent>,
@@ -16,30 +16,26 @@ impl Finder {
         Self { tx }
     }
 
-    pub fn lookup_playlist(&mut self, dir: &Path) {
-        let event = match Self::lookup_files(dir) {
-            Ok(files) => { 
-                if files.is_empty() { FinderEvent::NewEmptyPlaylist } 
-                else { FinderEvent::NewPlaylist(files) }
-            },
-            Err(_) => FinderEvent::Error,
+    pub fn lookup_playlist(&mut self, dir: &Path) { //event
+        match Self::lookup_files(dir) {
+            Ok(files) if files.is_empty() => self.tx.send_error_event(AppError::EmptyPlaylist),
+            Ok(files) => self.tx.send_finder_event(FinderEvent::NewFiles(files)),
+            Err(e) => self.tx.send_error_event(AppError::IO(e)),
         };
-
-        self.tx.send_finder_event(event);
     }
 
     fn lookup_files(dir: &Path) -> io::Result<Vec<PathBuf>> {
-        let is_extension_supported = |path: PathBuf| 
-            path.extension().map_or(false, |s| 
-                AudioPlayer::supported_formats().contains(&s.to_string_lossy().as_ref()))
+        let is_extension_supported = |path: &PathBuf| 
+            path.extension().is_some_and(|s|AudioPlayer::supported_formats().
+            contains(&s.to_string_lossy().as_ref()))
         ;
 
         let is_file_supported = |entry: &DirEntry| 
-            entry.path().is_file() && is_extension_supported(entry.path())
+            entry.path().is_file() && is_extension_supported(&entry.path())
         ;
 
-        let files: Vec<PathBuf> = fs::read_dir(dir)?.into_iter()
-            .filter_map(Result::ok)
+        let files: Vec<PathBuf> = fs::read_dir(dir)?
+            .flatten()
             .filter(|entry| is_file_supported(entry))
             .map(|entry| entry.path())
             .collect();

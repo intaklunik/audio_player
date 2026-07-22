@@ -86,6 +86,11 @@ impl<View: AppView> Application<View> {
                     Err(err) => self.error_event_handler(err),
                 };
             }
+            UIEvent::NewDir(path) => {
+                self.finder.lookup_playlist(&path);
+            }
+            UIEvent::Shuffle => {}
+            UIEvent::Repeat => {}
         };
     }
 

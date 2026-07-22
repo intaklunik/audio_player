@@ -38,6 +38,9 @@ pub enum UIEvent {
     Next,
     Prev,
     PlayPause(TrackMaybeId), // play button + from playlist
+    NewDir(PathBuf),
+    Shuffle,
+    Repeat,
 }
 
 #[derive(PartialEq)]

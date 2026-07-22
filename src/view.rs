@@ -1,14 +1,20 @@
 use crate::app::app::AppView;
 use crate::app::types::{AppEvent, SenderExt, UIEvent, ViewEvent};
 use crate::player::playlist::{TrackId, TrackMaybeId, TrackMetadata, TrackProgress};
+use cursive::views::EditView;
 use cursive::{
     CbSink, Cursive,
     view::{Nameable, Resizable},
     views::{Dialog, HideableView, LinearLayout, SelectView, TextView, ViewRef},
 };
 use std::fmt::Write;
+use std::path::PathBuf;
 use std::sync::mpsc::Sender;
 
+const QUIT_ICON: &str = "\u{1F5D9}";
+const OPENDIR_ICON: &str = "\u{1F4C2}";
+const SHUFFLE_ICON: &str = "\u{1F500}";
+const REPEAT_ICON: &str = "\u{1F501}";
 const PLAYPAUSE_ICON: &str = "\u{23EF}";
 const PREVTRACK_ICON: &str = "<<";
 const NEXTTRACK_ICON: &str = ">>";
@@ -19,6 +25,7 @@ const TRACK_PROGRESS_VIEW_NAME: &str = "TrackProgressView";
 const WAIT_VIEW_NAME: &str = "WaitView";
 const WAIT_VIEW_MSG_NAME: &str = "WaitViewMsg";
 const ERROR_VIEW_NAME: &str = "ErrorView";
+const OPENDIR_VIEW_NAME: &str = "OpenDirView";
 
 pub trait CursiveViewExt {
     fn create(&mut self);
@@ -35,13 +42,18 @@ trait CursiveExt {
 
     fn show_update_message(&mut self, msg: &str);
     fn hide_update_message(&mut self);
+
+    fn show_opendir_view(&mut self);
 }
 
 trait CursiveInputExt {
+    fn quit_app(&mut self);
+    fn open_dir(&mut self);
+    fn shuffle_mode(&mut self);
+    fn track_on_repeat(&mut self);
     fn play_next(&mut self);
     fn play_prev(&mut self);
     fn play_pause(&mut self);
-    fn quit_app(&mut self);
 }
 
 impl CursiveViewExt for Cursive {
@@ -69,6 +81,10 @@ impl CursiveViewExt for Cursive {
         self.add_layer(layout);
 
         self.menubar()
+            .add_leaf(QUIT_ICON, |s| s.quit_app())
+            .add_leaf(OPENDIR_ICON, |s| s.open_dir())
+            .add_leaf(SHUFFLE_ICON, |s| s.shuffle_mode())
+            .add_leaf(REPEAT_ICON, |s| s.track_on_repeat())
             .add_leaf(PREVTRACK_ICON, |s| s.play_prev())
             .add_leaf(PLAYPAUSE_ICON, |s| s.play_pause())
             .add_leaf(NEXTTRACK_ICON, |s| s.play_next());
@@ -117,6 +133,24 @@ impl CursiveExt for Cursive {
                         s.pop_layer();
                     },
                 ),
+            );
+        }
+    }
+
+    fn show_opendir_view(&mut self) {
+        let view = self.find_name::<EditView>(OPENDIR_VIEW_NAME);
+        if view.is_none() {
+            self.add_layer(
+                Dialog::around(EditView::new().with_name(OPENDIR_VIEW_NAME).fixed_width(20))
+                    .button("Ok", |s| {
+                        let path = s
+                            .call_on_name(OPENDIR_VIEW_NAME, |view: &mut EditView| {
+                                view.get_content()
+                            })
+                            .unwrap();
+                        send_ui_event(s, UIEvent::NewDir(PathBuf::from(path.as_str())));
+                        s.pop_layer();
+                    }),
             );
         }
     }
@@ -170,6 +204,18 @@ fn track_content(track: &TrackMetadata) -> String {
 }
 
 impl CursiveInputExt for Cursive {
+    fn open_dir(&mut self) {
+        self.show_opendir_view();
+    }
+
+    fn shuffle_mode(&mut self) {
+        send_ui_event(self, UIEvent::Shuffle);
+    }
+
+    fn track_on_repeat(&mut self) {
+        send_ui_event(self, UIEvent::Repeat);
+    }
+
     fn play_next(&mut self) {
         self.show_update_message("Loading next track");
         send_ui_event(self, UIEvent::Next);

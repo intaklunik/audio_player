@@ -12,3 +12,12 @@ thiserror = "2.0.18"
 [[bin]]
 name = "AudioPlayer"
 path = "src/main.rs"
+
+[profile.release]
+debug = "line-tables-only"
+
+[rust]
+debuginfo-level = 1
+
+[build]
+rustflags = ["-C", "force-frame-pointers=yes"]
